@@ -17,7 +17,7 @@ set rho_cl [expr $rho/$nof_classes]
 set mpktsize 500
 
 puts "rho_cl=$rho_cl, nof_classes=$nof_classes"
-set mean_intarrtime [expr ($mpktsize+40)*8.0*$mfsize/($bnbw*$rho_cl)]
+set mean_intarrtime [expr ($mpktsize+40)8.0$mfsize/($bnbw*$rho_cl)]
 #flow interarrival time
 puts "1/la = $mean_intarrtime"
 for {set ii 0} {$ii < $nof_classes} {incr ii} {
@@ -84,32 +84,39 @@ proc start_flow {class} {
     set cur_fsize [expr ceil([$rng exponential $mfsize])]
     # $tcp_s($class,$ind) reset
     # $tcp_d($class,$ind) reset
-    $ftp($class,$ind) produce $cur_fsize
+    [lindex [lindex $ftp $class] $ind] produce $cur_fsize
     set freelist($class) [lreplace $freelist($class) 0 0]
     lappend reslist($class) [list $ind $tt $cur_fsize]
-    set newarrtime [expr $tt+[$rng exponential $mean_intarrtime]]
+    set newarrtime [expr $tt+[[$rng value] exponential $mean_intarrtime]]
     $nssim at $newarrtime "start_flow $class"
     if {$tt > $simend} {
         $nssim at $tt "$nssim halt"
     }
 }
+
+set fmon_bn [$nssim makeflowmon 0]
+$nssim attach-fmon [$nssim link $n0 $n5] $fmon_bn
+
 set parr_start 0
 set pdrops_start 0
-# proc record_start {} {
-#     global fmon_bn nssim parr_start pdrops_start nof_classes
-#     #you have to create the fmon_bn (flow monitor) in the bottleneck link
-#     set parr_start [$fmon_bn set parrivals_]
-#     set pdrops_start [$fmon_bn set pdrops_]
-#     puts "Bottleneck at [$nssim now]: arr=$parr_start, drops=$pdrops_start"
-# }
+
+proc record_start {} {
+    global fmon_bn nssim parr_start pdrops_start nof_classes
+    #you have to create the fmon_bn (flow monitor) in the bottleneck link
+    set parr_start [$fmon_bn set parrivals_]
+    set pdrops_start [$fmon_bn set pdrops_]
+    puts "Bottleneck at [$nssim now]: arr=$parr_start, drops=$pdrops_start"
+}
+
 set parr_end 0
 set pdrops_end 0
-# proc record_end {} {
-#     global fmon_bn nssim parr_start pdrops_start nof_classes
-#     set parr_start [$fmon_bn set parrivals_]
-#     set pdrops_start [$fmon_bn set pdrops_]
-#     puts "Bottleneck at [$nssim now]: arr=$parr_start, drops=$pdrops_start"
-# }
+
+proc record_end {} {
+    global fmon_bn nssim parr_start pdrops_start nof_classes
+    set parr_start [$fmon_bn set parrivals_]
+    set pdrops_start [$fmon_bn set pdrops_]
+    puts "Bottleneck at [$nssim now]: arr=$parr_start, drops=$pdrops_start"
+}
 
 
 set nssim [new Simulator]
@@ -216,26 +223,32 @@ for {set i 300 } {$i < 400} {incr i} {
     lappend freelist(3) [expr $i-300]
 
     lappend ftp(3) [new Application/FTP]
+
     [lindex $ftp(3) [expr $i-300]] set packet_size_ 1460
     [lindex $ftp(3) [expr $i-300]] attach-agent [lindex $tcp3 [expr $i-300]]
 }
+
+set rng [new RNG]
+
+$rng seed 30
+
 
 # create a random variable that follows the uniform distribution
 set loss_random_variable [new RandomVariable/Uniform]
 # the range of the random variable;
 $loss_random_variable set min_ 0
 $loss_random_variable set max_ 100
+
 # create the error model;
 set loss_module [new ErrorModel]
 #a null agent where the dropped packets go to
 $loss_module drop-target [new Agent/Null]
 # error rate will then be (0.1 = 10 / (100 - 0));
 ##Todo: This is to be changed according to p = [0.1,0.5, 1,2,4,5]%
-$loss_module set rate_ 01.1
+$loss_module set rate_ 0.1
 # attach the random variable to loss module;
 $loss_module ranvar $loss_random_variable
 $nssim lossmodel $loss_module $n0 $n5
-
 
 
 start_flow 0
